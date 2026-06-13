@@ -1,0 +1,112 @@
+    def _extract_comparison_dates(self, q: str) -> list:
+        """
+        Extract N date ranges for comparison queries.
+        Supports:
+          • between YYYY and YYYY          → 2 annual ranges
+          • YYYY vs YYYY vs YYYY           → N annual ranges
+          • Month YYYY vs Month YYYY       → 2 month ranges
+          • from YYYY to YYYY              → 2 annual ranges
+          • comma/and-separated years:     2018, 2020 and 2022 → 3 ranges
+        """
+
+        # ── Pattern A: between YYYY and YYYY ──────────────────────────
+        between = re.search(r'\bbetween\s+(\d{4})\s+and\s+(\d{4})\b', q)
+        if between:
+            y1, y2 = int(between.group(1)), int(between.group(2))
+            if 1990 <= y1 <= 2100 and 1990 <= y2 <= 2100 and y1 != y2:
+                return [_year_range(min(y1, y2)), _year_range(max(y1, y2))]
+
+        # ── Pattern B: YYYY vs YYYY (vs YYYY …) ───────────────────────
+        vs_chain = re.findall(r'\b(\d{4})\s+(?:vs\.?|versus)\s+(\d{4})\b', q)
+        if vs_chain:
+            years_seen = []
+            for pair in vs_chain:
+                for y in pair:
+                    yi = int(y)
+                    if 1990 <= yi <= 2100 and yi not in years_seen:
+                        years_seen.append(yi)
+            if len(years_seen) >= 2:
+                return [_year_range(y) for y in years_seen]
+
+        # ── Pattern C: Month YYYY vs Month YYYY ───────────────────────
+        month_pat = r'(?:' + '|'.join(MONTH_MAP.keys()) + r')'
+        mv_mv = re.search(
+            rf'\b({month_pat})\s+(\d{{4}})\s+(?:vs\.?|versus|and)\s+'
+            rf'({month_pat})\s+(\d{{4}})\b',
+            q
+        )
+        if mv_mv:
+            m1, y1 = MONTH_MAP[mv_mv.group(1)], int(mv_mv.group(2))
+            m2, y2 = MONTH_MAP[mv_mv.group(3)], int(mv_mv.group(4))
+            return [_month_range(m1, y1), _month_range(m2, y2)]
+            
+        # ── Pattern C2/C3: N months with a shared year ───────────────
+        # Handles ANY of:
+        #   "June and July 2020"
+        #   "June and July in 2020"
+        #   "June vs July in 2020"
+        #   "June, July and August in 2021"  (3 months)
+        # Strategy: find all month names in q, find a shared 4-digit year,
+        # and only fire if 2+ months are found — this handles 2 or 3+ months.
+        _all_months_found = re.findall(rf'\b({month_pat})\b', q)
+        _year_found = re.search(r'\b(\d{4})\b', q)
+        if len(_all_months_found) >= 2 and _year_found:
+            _shared_year = int(_year_found.group(1))
+            if 1990 <= _shared_year <= 2100:
+                # Deduplicate while preserving order
+                _seen = []
+                for _m in _all_months_found:
+                    if _m not in _seen:
+                        _seen.append(_m)
+                return [_month_range(MONTH_MAP[_m], _shared_year) for _m in _seen]
+
+        # ── Pattern D: from/over YYYY to YYYY ──────────────────────────
+        from_to = re.search(r'\b(?:from\s+|over\s+)?(\d{4})\s+to\s+(\d{4})\b', q)
+        if from_to:
+            y1, y2 = int(from_to.group(1)), int(from_to.group(2))
+            if 1990 <= y1 <= 2100 and 1990 <= y2 <= 2100 and y1 != y2:
+                return [_year_range(y1), _year_range(y2)]
+
+        # ── Pattern E: comma/and-separated years ──────────────────────
+        multi_year = self._extract_listed_years(q)
+        if len(multi_year) >= 2:
+            # Check if a season is mentioned in the query
+            active_season = None
+            for season in LOCAL_SEASONS.keys():
+                if re.search(rf'(?<![\w-])\b{season}\b', q):
+                    active_season = season
+                    break
+            
+            if active_season:
+                cfg = LOCAL_SEASONS[active_season]
+                months = cfg['months']
+                season_ranges = []
+                for y in multi_year:
+                    if months[0] > months[-1]:
+                        s = f"{y}-{months[0]:02d}-01"
+                        _, e = _month_range(months[-1], y + 1)
+                    else:
+                        s, _ = _month_range(months[0], y)
+                        _, e = _month_range(months[-1], y)
+                    season_ranges.append((s, e))
+                return season_ranges
+
+            return [_year_range(y) for y in multi_year]
+
+        # ── Pattern D2: Quarters in comparison: "Q1 2021 vs Q3 2021" ──────
+        _QUARTERS_C = {1: [1,2,3], 2: [4,5,6], 3: [7,8,9], 4: [10,11,12]}
+        _quarter_matches = list(re.finditer(r'\bq([1-4])\s+(\d{4})\b', q, re.IGNORECASE))
+        if len(_quarter_matches) >= 2:
+            _qranges = []
+            for _qm in _quarter_matches:
+                _qnum, _qyr = int(_qm.group(1)), int(_qm.group(2))
+                if 1990 <= _qyr <= 2100:
+                    _qmons = _QUARTERS_C[_qnum]
+                    _sq, _ = _month_range(_qmons[0],  _qyr)
+                    _,  _eq = _month_range(_qmons[-1], _qyr)
+                    _qranges.append((_sq, _eq))
+            if len(_qranges) >= 2:
+                return _qranges
+
+        # ── Fallback: general date ranges ───────────────────────────────
+        return self._extract_all_date_ranges(q)

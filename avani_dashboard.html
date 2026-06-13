@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.V.A.N.I. - Soil Intelligence Platform</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --bg-base: #030712;
+            --bg-surface: #0a1628;
+            --bg-card: rgba(10, 22, 40, 0.8);
+            --border-glow: rgba(0, 210, 255, 0.12);
+            --border-dim: rgba(0, 210, 255, 0.05);
+            --accent-cyan: #00d2ff;
+            --accent-teal: #00b4d8;
+            --accent-green: #22c55e;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --text-primary: #e2e8f0;
+            --text-secondary: #64748b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 210, 255, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 210, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 210, 255, 0); }
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        @keyframes scanline {
+            0% { top: 0%; }
+            100% { top: 100%; }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 68px;
+            background-color: var(--bg-surface);
+            border-right: 1px solid rgba(0, 210, 255, 0.15);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: width 0.3s ease;
+            position: relative;
+            z-index: 100;
+        }
+
+        .sidebar:hover, .sidebar.expanded {
+            width: 240px;
+        }
+
+        .sidebar-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #003d5b, #00b4d8);
+            border: 1.5px solid var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: #fff;
+            margin: 20px 0;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.4);
+            animation: pulse 2s infinite;
+            flex-shrink: 0;
+        }
+
+        .nav-items {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 0 10px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--text-secondary);
+            text-decoration: none;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .nav-item:hover {
+            color: var(--accent-cyan);
+            background: rgba(0, 210, 255, 0.05);
+            transform: translateX(3px);
+        }
+
+        .nav-item.active {
+            border-left: 3px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            background: rgba(0, 210, 255, 0.1);
+        }
+
+        .nav-icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+        }
+
+        .nav-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .nav-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .nav-label, .sidebar.expanded .nav-label {
+            opacity: 1;
+        }
+
+        /* Main Area */
+        .main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-base);
+            position: relative;
+        }
+
+        /* Header */
+        .header {
+            height: 64px;
+            background: rgba(3, 7, 18, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 210, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 50;
+        }
+
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header-title {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 800;
+            font-size: 1.4rem;
+            letter-spacing: 0.15em;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 15px rgba(0, 210, 255, 0.5);
+            display: flex;
+            align-items: center;
+        }
+        
+        .header-title span {
+            color: var(--text-primary);
+            margin: 0 2px;
+        }
+
+        .header-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .search-bar {
+            background: rgba(10, 22, 40, 0.6);
+            border: 1px solid var(--border-glow);
+            border-radius: 20px;
+            padding: 8px 16px;
+            width: 400px;
+            display: flex;
+            align-items: center;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .search-bar input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            width: 100%;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+        }
+
+        .search-bar input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .date-pill {
+            background: rgba(0, 210, 255, 0.1);
+            border: 1px solid var(--border-glow);
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+        }
+
+        .notification {
+            position: relative;
+            cursor: pointer;
+        }
+
+        .notification svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--text-secondary);
+        }
+
+        .notification .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--accent-red);
+            color: white;
+            font-size: 0.6rem;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--bg-base);
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glow);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        /* Content Area */
+        .content-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .left-panel {
+            flex: 0 0 75%;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .right-panel {
+            flex: 0 0 25%;
+            border-left: 1px solid rgba(0, 210, 255, 0.1);
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            background: rgba(3, 7, 18, 0.5);
+        }
+
+        /* Cards */
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-card:hover {
+            border-color: rgba(0, 210, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.1);
+        }
+
+        /* Metrics Row */
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .metric-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .metric-title {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            margin-bottom: 10px;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: blink 2s infinite;
+        }
+
+        .status-dot.active { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+        .status-dot.warn { background: var(--accent-amber); box-shadow: 0 0 8px var(--accent-amber); }
+
+        /* Map Section */
+        .map-section {
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .map-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .map-title::before {
+            content: '';
+            display: block;
+            width: 6px;
+            height: 20px;
+            background: var(--accent-cyan);
+            border-radius: 3px;
+        }
+
+        .layer-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .layer-btn {
+            background: rgba(0, 210, 255, 0.05);
+            border: 1px solid var(--border-glow);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .layer-btn.active {
+            background: rgba(0, 210, 255, 0.15);
+            color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
+        }
+
+        .layer-btn:hover {
+            transform: scale(0.97);
+        }
+
+        .map-container {
+            flex: 1;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-glow);
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #030712;
+        }
+
+        .map-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            animation: scanline 4s linear infinite;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        .map-legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(10, 22, 40, 0.9);
+            border: 1px solid var(--border-glow);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .legend-title {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .gradient-bar {
+            width: 150px;
+            height: 10px;
+            background: linear-gradient(to right, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6);
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        /* Analytics Row */
+        .analytics-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: 300px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 100%;
+            width: 100%;
+        }
+
+        .panel-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent-teal);
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-dim);
+            padding-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Right Panel Cards */
+        .status-card .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-dim);
+            font-size: 0.85rem;
+        }
+
+        .status-card .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .query-interface textarea {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-glow);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            resize: none;
+            height: 80px;
+            margin-bottom: 10px;
+        }
+
+        .query-interface textarea:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.1);
+        }
+
+        .btn-submit {
+            width: 100%;
+            background: linear-gradient(135deg, rgba(0,210,255,0.15), rgba(0,180,216,0.15));
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+
+        .btn-submit:hover {
+            background: linear-gradient(135deg, rgba(0,210,255,0.3), rgba(0,180,216,0.3));
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .chip-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .chip {
+            background: rgba(0, 210, 255, 0.08);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            color: var(--accent-teal);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chip:hover {
+            background: rgba(0, 210, 255, 0.2);
+        }
+
+        .insights-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .insight-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .insight-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+        }
+
+        .insight-bar-bg {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .insight-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-teal), var(--accent-cyan));
+            border-radius: 3px;
+        }
+
+        .lit-item {
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            border-left: 2px solid var(--accent-cyan);
+            margin-bottom: 8px;
+        }
+
+        .lit-title {
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+
+        .lit-badge {
+            display: inline-block;
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--accent-green);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+        
+        /* Custom scrollbar for Leaflet popup */
+        .leaflet-popup-content-wrapper {
+            background: rgba(10, 22, 40, 0.9) !important;
+            border: 1px solid var(--accent-cyan) !important;
+            color: #fff !important;
+            border-radius: 8px !important;
+            backdrop-filter: blur(5px);
+        }
+        .leaflet-popup-tip {
+            background: rgba(10, 22, 40, 0.9) !important;
+            border: 1px solid var(--accent-cyan) !important;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-logo">A</div>
+        <div class="nav-items">
+            <a href="#" class="nav-item active">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+                </div>
+                <span class="nav-label">Dashboard</span>
+            </a>
+            <a href="#" class="nav-item">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+                </div>
+                <span class="nav-label">Moisture Map</span>
+            </a>
+            <a href="#" class="nav-item">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                </div>
+                <span class="nav-label">Analytics</span>
+            </a>
+            <a href="#" class="nav-item">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                </div>
+                <span class="nav-label">Literature</span>
+            </a>
+            <a href="#" class="nav-item">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                </div>
+                <span class="nav-label">Reports</span>
+            </a>
+            <a href="#" class="nav-item" style="margin-top: auto; margin-bottom: 20px;">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+                </div>
+                <span class="nav-label">Settings</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Area -->
+    <div class="main-area">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left fade-in">
+                <div class="header-title">A<span>.</span>V<span>.</span>A<span>.</span>N<span>.</span>I<span>.</span></div>
+                <div class="header-subtitle">National Soil Intelligence Platform</div>
+            </div>
+            
+            <div class="search-bar fade-in delay-1">
+                <input type="text" placeholder="Query region, date, metric...">
+            </div>
+
+            <div class="header-right fade-in delay-2">
+                <div class="date-pill">May 23, 2026</div>
+                <div class="notification">
+                    <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>
+                    <div class="badge">3</div>
+                </div>
+                <div class="user-avatar">AD</div>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-area">
+            
+            <!-- Left Panel -->
+            <div class="left-panel">
+                
+                <!-- Metrics Row -->
+                <div class="metrics-row fade-in delay-1">
+                    <div class="glass-card metric-card">
+                        <div class="metric-title">Soil Moisture Index</div>
+                        <div class="metric-value">42.7%</div>
+                        <div class="metric-label">National Average</div>
+                        <svg width="100%" height="30" style="margin-top:10px;">
+                            <path d="M0 20 Q 20 5, 40 15 T 80 10 T 120 25 T 160 5" fill="none" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <circle cx="160" cy="5" r="3" fill="var(--accent-cyan)"/>
+                        </svg>
+                    </div>
+                    <div class="glass-card metric-card">
+                        <div class="metric-title">Drought Risk</div>
+                        <div class="metric-value" style="color: var(--accent-amber);">🟡 MODERATE</div>
+                        <div class="metric-label">Risk Level</div>
+                        <div style="display:flex; gap:4px; height:30px; align-items:flex-end; margin-top:10px;">
+                            <div style="flex:1; background:var(--accent-green); height:20%;"></div>
+                            <div style="flex:1; background:var(--accent-green); height:40%;"></div>
+                            <div style="flex:1; background:var(--accent-amber); height:70%;"></div>
+                            <div style="flex:1; background:var(--accent-amber); height:80%;"></div>
+                            <div style="flex:1; background:var(--accent-red); height:40%;"></div>
+                        </div>
+                    </div>
+                    <div class="glass-card metric-card">
+                        <div class="metric-title">Active Satellites</div>
+                        <div class="metric-value">
+                            <span class="status-dot active"></span>
+                            <span class="status-dot active"></span>
+                            <span class="status-dot active"></span>
+                            3 Active
+                        </div>
+                        <div class="metric-label">AMSR2 · SMAP · Sentinel</div>
+                    </div>
+                    <div class="glass-card metric-card">
+                        <div class="metric-title">Coverage Area</div>
+                        <div class="metric-value">3.29M km²</div>
+                        <div class="metric-label">India Total</div>
+                    </div>
+                </div>
+
+                <!-- Map Section -->
+                <div class="glass-card map-section fade-in delay-2">
+                    <div class="map-header">
+                        <div class="map-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                            Live Moisture Map — India
+                        </div>
+                        <div class="layer-controls">
+                            <button class="layer-btn active">Moisture</button>
+                            <button class="layer-btn">Drought</button>
+                            <button class="layer-btn">Vegetation</button>
+                        </div>
+                    </div>
+                    <div class="map-container">
+                        <div id="map"></div>
+                        <div class="map-overlay"></div>
+                        <div class="map-legend">
+                            <div class="legend-title">Soil Moisture (%)</div>
+                            <div class="gradient-bar"></div>
+                            <div class="legend-labels">
+                                <span>Dry</span>
+                                <span>Wet</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Row -->
+                <div class="analytics-row fade-in delay-3">
+                    <div class="glass-card">
+                        <div class="panel-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                            Seasonal Moisture Trend
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="panel-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                            Regional Distribution
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="barChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel -->
+            <div class="right-panel fade-in delay-4">
+                
+                <div class="glass-card status-card">
+                    <div class="panel-title">System Status</div>
+                    <div class="status-item">
+                        <span>AMSR2 Dataset</span>
+                        <span><span class="status-dot active"></span>Online</span>
+                    </div>
+                    <div class="status-item">
+                        <span>SMAP Feed</span>
+                        <span><span class="status-dot active"></span>Active</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Last Sync</span>
+                        <span style="font-family:'JetBrains Mono', monospace;">10:54 AM</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Coverage</span>
+                        <span style="font-family:'JetBrains Mono', monospace;">2012-2023</span>
+                    </div>
+                </div>
+
+                <div class="glass-card query-interface">
+                    <div class="panel-title">Intelligence Query</div>
+                    <textarea placeholder="Ask about soil moisture in any region..."></textarea>
+                    <button class="btn-submit">Initialize Query</button>
+                    <div class="chip-container">
+                        <span class="chip">Trend in Punjab</span>
+                        <span class="chip">Monsoon 2022</span>
+                        <span class="chip">Rajasthan vs Gujarat</span>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="panel-title">Regional Insights</div>
+                    <div class="insights-list">
+                        <div class="insight-item">
+                            <div class="insight-header"><span>Assam</span><span style="color:var(--accent-cyan); font-family:'JetBrains Mono';">74%</span></div>
+                            <div class="insight-bar-bg"><div class="insight-bar-fill" style="width: 74%;"></div></div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-header"><span>Kerala</span><span style="color:var(--accent-cyan); font-family:'JetBrains Mono';">69%</span></div>
+                            <div class="insight-bar-bg"><div class="insight-bar-fill" style="width: 69%;"></div></div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-header"><span>West Bengal</span><span style="color:var(--accent-cyan); font-family:'JetBrains Mono';">65%</span></div>
+                            <div class="insight-bar-bg"><div class="insight-bar-fill" style="width: 65%;"></div></div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-header"><span>Tamil Nadu</span><span style="color:var(--accent-cyan); font-family:'JetBrains Mono';">61%</span></div>
+                            <div class="insight-bar-bg"><div class="insight-bar-fill" style="width: 61%;"></div></div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-header"><span>Rajasthan</span><span style="color:var(--accent-amber); font-family:'JetBrains Mono';">22%</span></div>
+                            <div class="insight-bar-bg"><div class="insight-bar-fill" style="width: 22%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="panel-title">Literature Insights</div>
+                    <div class="lit-item">
+                        <div class="lit-title">Evaluation of AMSR2 Soil Moisture Products over India</div>
+                        <div class="lit-badge">IEEE TGRS</div>
+                    </div>
+                    <div class="lit-item">
+                        <div class="lit-title">Drought Assessment using Satellite Soil Moisture</div>
+                        <div class="lit-badge">Remote Sensing</div>
+                    </div>
+                    <div class="lit-item">
+                        <div class="lit-title">SMAP Validation across Agricultural Zones</div>
+                        <div class="lit-badge">ISRO Journal</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Sidebar toggle logic
+        document.getElementById('sidebar').addEventListener('mouseenter', function() {
+            this.classList.add('expanded');
+        });
+        document.getElementById('sidebar').addEventListener('mouseleave', function() {
+            this.classList.remove('expanded');
+        });
+
+        // Initialize Map
+        const map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false
+        }).setView([20.5937, 78.9629], 4.5);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Map Data
+        const cities = [
+            { name: "Mumbai", lat: 19.0760, lon: 72.8777, moisture: 58 },
+            { name: "Delhi", lat: 28.7041, lon: 77.1025, moisture: 31 },
+            { name: "Chennai", lat: 13.0827, lon: 80.2707, moisture: 72 },
+            { name: "Kolkata", lat: 22.5726, lon: 88.3639, moisture: 65 },
+            { name: "Bangalore", lat: 12.9716, lon: 77.5946, moisture: 48 },
+            { name: "Hyderabad", lat: 17.3850, lon: 78.4867, moisture: 44 },
+            { name: "Ahmedabad", lat: 23.0225, lon: 72.5714, moisture: 28 },
+            { name: "Jaipur", lat: 26.9124, lon: 75.7873, moisture: 22 },
+            { name: "Bhopal", lat: 23.2599, lon: 77.4126, moisture: 51 },
+            { name: "Lucknow", lat: 26.8467, lon: 80.9462, moisture: 47 }
+        ];
+
+        function getColor(moisture) {
+            if (moisture > 60) return '#3b82f6';
+            if (moisture > 45) return '#06b6d4';
+            if (moisture > 35) return '#22c55e';
+            if (moisture > 25) return '#eab308';
+            return '#f59e0b';
+        }
+
+        cities.forEach(city => {
+            const color = getColor(city.moisture);
+            L.circleMarker([city.lat, city.lon], {
+                radius: 8,
+                fillColor: color,
+                color: '#fff',
+                weight: 1,
+                opacity: 0.8,
+                fillOpacity: 0.8
+            }).addTo(map).bindPopup(`<div style="text-align:center;"><b>${city.name}</b><br/><span style="color:${color}; font-size:1.2em; font-family:'JetBrains Mono';">${city.moisture}%</span></div>`);
+        });
+
+        // Initialize Charts
+        Chart.defaults.color = '#64748b';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        const trendCtx = document.getElementById('trendChart').getContext('2d');
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [{
+                    label: 'Moisture (%)',
+                    data: [38, 35, 32, 34, 40, 58, 72, 68, 55, 48, 42, 39],
+                    borderColor: '#00d2ff',
+                    backgroundColor: 'rgba(0, 210, 255, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#0a1628',
+                    pointBorderColor: '#00d2ff',
+                    pointBorderWidth: 2,
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: 'rgba(0, 210, 255, 0.05)' }, min: 20, max: 80 },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Assam', 'Kerala', 'WB', 'TN', 'MP', 'KA', 'MH', 'RJ'],
+                datasets: [{
+                    label: 'Moisture (%)',
+                    data: [74, 69, 65, 61, 51, 48, 44, 22],
+                    backgroundColor: [
+                        '#3b82f6', '#06b6d4', '#06b6d4', '#06b6d4',
+                        '#22c55e', '#22c55e', '#22c55e', '#f59e0b'
+                    ],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: 'rgba(0, 210, 255, 0.05)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
